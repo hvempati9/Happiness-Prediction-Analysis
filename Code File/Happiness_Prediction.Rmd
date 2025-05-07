@@ -1,0 +1,1411 @@
+---
+title: "Happiness Analysis"
+author: "Nidhi Patni, Venkata Sai Mounish Ennamuri, Hema Pavani Vempati"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# TEAM MEMBERS
+
+1. Nidhi Jitendra Patni
+2. Venkata Sai Mounish Ennamuri
+3. Hema Pavani Vempati
+
+# BUSINESS CONTEXT
+
+The World Happiness Report provides important insights into the happiness and well-being of people around the world, which can inform business strategies and policy decisions that contribute to a more sustainable and prosperous global economy. 
+
+# PROBLEM DESCRIPTION
+
+The World Happiness Report seeks to address is to measure and understand the levels of happiness and well-being of people around the world and the factors that contribute to it. This is important because happiness and well-being are fundamental human needs, and understanding the factors that contribute to them can inform policy decisions and interventions that improve people's lives. Establishing a model that can predict the Happiness Index of a country based on factors such as social, economic, health etc. can go a long way in helping policy decisions. Our goal is to establish this model. (Limitation: Data used only for year 2021)
+
+# DATASET DESCRIPTION
+
+The World Happiness Report dataset consist of several variables, such as:
+
+1. Country : The name of the country
+2. Region :  Region to which the country belongs
+3. Ladder Score : the overall score of happiness in a country on an average from the collective responses of the people based on the factors impacting well being. 
+4. GDP : the gross domestic product per capita in purchasing power parity (PPP) adjusted dollars.
+5. Freedom : the perceived freedom to make life choices in the country.
+6. Corruption : the perceived level of corruption in the government and business sectors of the country.
+7. Life Expectancy : Healthy life expectancy at birth
+8. Social Support : the perceived social support (ability to count on others) in the country
+9. Dystopia residual : the extent to which the country's happiness score deviates from an imagined dystopian society with the least happy possible outcomes.
+10. Generosity :  the perceived generosity of people in the country.
+
+# PROJECT FLOW
+
+# STEP 1: INCLUDING LIBRARIES:
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(reshape2)
+library(lattice)
+library(dplyr)
+library(ggplot2)
+library(data.table)
+library(DataExplorer)
+library(viridis)
+library(corrplot)
+library(car)
+
+```
+
+# STEP 2: DATA PREPARATION:
+
+# Set Directory
+
+```{r}
+setwd("C:/Users/nidsp/OneDrive - Illinois Institute of Technology/Desktop/Happiness 2021 Analysis")
+```
+
+# Data Loading
+
+```{r}
+OriginalData <- read.csv("world-happiness-report-2021.csv", na.strings = c('N/A'))
+```
+
+# Checking data type
+
+```{r}
+print(class(OriginalData)) 
+```
+
+# Reviewing the data
+
+```{r}
+OriginalData <- as.data.table(OriginalData)
+OriginalData
+```
+# Finding number of observations and columns in dataset
+
+```{r}
+dim(OriginalData)
+```
+> There are 149 observations and 20 features in dataset.
+
+# Reviewing the structure of data frame
+
+```{r}
+str(OriginalData)
+```
+> All Columns are assigned with correct data types.
+
+
+# Loading required data in data frame.
+
+```{r}
+data <- subset(OriginalData, select=c("Country.name", 
+                              "Regional.indicator", 
+                              "Ladder.score", 
+                              "Logged.GDP.per.capita", 
+                              "Social.support", 
+                              "Healthy.life.expectancy", 
+                              "Freedom.to.make.life.choices", 
+                              "Generosity", 
+                              "Perceptions.of.corruption", 
+                              "Dystopia...residual"))
+
+data
+```
+
+# Renaming the names of columns for better readability
+
+```{r}
+data <- data %>% rename( Country=Country.name, 
+                         Region=Regional.indicator, 
+                         Happiness_score=Ladder.score, 
+                         GDP=Logged.GDP.per.capita, 
+                         Social_support=Social.support, 
+                         Life_expectancy=Healthy.life.expectancy, 
+                         Freedom=Freedom.to.make.life.choices,
+                         Corruption=Perceptions.of.corruption, 
+                         Dystopia_residual=Dystopia...residual)
+
+data
+```
+
+# Reviewing summary of data
+
+```{r}
+summary(data)
+```
+
+# Descriptive Statistics
+
+```{r}
+Mean_Happiness_Score <- mean(data$Happiness_score)
+Variance_Happiness_Score <- var(data$Happiness_score)
+StdDev_Happiness_Score <- sd(data$Happiness_score)
+Median_Happiness_Score <- median(data$Happiness_score)
+
+cat("Mean Happiness score is ",Mean_Happiness_Score)
+cat("\nVariance of Happiness score is ",Variance_Happiness_Score)
+cat("\nStandard Deviation of Happiness score is ",StdDev_Happiness_Score)
+cat("\nMedian Happiness score is ",Median_Happiness_Score)
+```
+
+# STEP 3: DATA CLEANING
+
+# Checking missing values
+
+```{r}
+MissingValueColumnName <- colnames(data)[colSums(is.na(data)) > 0]
+NumberOfMissingValues <- sum(is.na(data))
+cat("There are", NumberOfMissingValues, "Missing Values in Column name", MissingValueColumnName) 
+```
+> There are no missing values, so no need of data cleaning.
+
+# Unique values in Region
+
+
+```{r}
+# Get the unique values of a Region column
+unique_values <- data %>% distinct(Region)
+
+# Print the unique values
+print(unique_values)
+```
+
+# Combining Multiple similar named region into one
+
+```{r}
+# Creating data frame for unique region
+dataRegion <- data
+# change region to factor
+dataRegion$Region <- as.factor(dataRegion$Region)
+# combine south asia and southeast asia and east asia
+dataRegion <- dataRegion %>% mutate(Region = fct_recode(Region,
+                             # new name         old name
+                             "Southeast Asia" = "South Asia", 
+                             "Southeast Asia" = "East Asia"))
+
+# Get the unique values of a Region column
+
+
+# Print the unique values
+print(unique_values)
+```
+
+
+# STEP 4: CHECKING NORMAL DISTRIBUTION OF TARGET VARIABLE
+
+# 1. Checking distribution of target variable Happiness_score using Histogram as we know that target variable is a continuous variable
+
+```{r}
+ggplot(data=data, aes(data$Happiness_score,y = after_stat(count))) +
+  geom_histogram( fill = "orange", color = "black", bins = 30)+
+  theme_light(base_size = 10)+
+  labs(title="Happiness score all over the world", x = "World Happiness Score", y = "Frequency")
+```
+
+> The plot suggests that the distribution is roughly bell-shaped, with a peak around the score of 5. Additionally, the plot suggests that the distribution is slightly skewed to the right.
+
+# 2. Plot to check normal distribution of target variable
+
+```{r}
+qqnorm(data$Happiness_score, pch = 1, frame = FALSE)
+qqline(data$Happiness_score, col = "red")
+```
+
+> In the above normal probability plot , the data points roughly follow a straight line which states that the data follows a normal distribution.
+
+
+# 3. Checking normal distribution of target variable using Shapiro's test.
+
+```{r}
+shapiro.test(data$Happiness_score)
+```
+
+> The output of this test will include a p-value. If the p-value is greater than 0.05, then we cannot reject the null hypothesis that the data is normally distributed. If the p-value is less than 0.05, then we can reject the null hypothesis and conclude that the data is not normally distributed. Here in this data, pvalue > 0.05 implying that the distribution of the data are not significantly different from normal distribution. In other words, we can assume the normality.
+
+# STEP 5 : CHECKING OUTLIERS IN TARGET VARIABLE
+
+# 1. Checking outliers in target variable using Boxplot
+
+```{r}
+boxplot(data$Happiness_score)
+abline(h = min(data$Happiness_score), col = "Blue")
+abline(h = max(data$Happiness_score), col = "Yellow")
+abline(h = median(data$Happiness_score), col = "Green")
+abline(h = quantile(data$Happiness_score, c(0.25, 0.75)), col = "Red")
+```
+
+>The resulting plot shows a box representing the interquartile range (IQR) of the Happiness_score variable, with whiskers extending to the minimum and maximum values within 1.5 times the IQR from the lower and upper quartiles, respectively. The horizontal reference lines are overlaid on the box plot, highlighting the minimum, maximum, median, and quartile values. By inspecting the plot, any values beyond the whiskers can be considered potential outliers. There is one data point beyond the whiskers, it should be investigated further to determine whether it is a true outliers in the data or not.
+
+
+# 2. Checking outliers in target variable using Zscore
+
+
+```{r}
+#Standardizing Happiness score
+Happiness_score_z_scores <- (data$Happiness_score - mean(data$Happiness_score)) / sd(data$Happiness_score)
+# Find the data points with z-score greater than 3 (an arbitrary threshold)
+Happiness_score_outliers <- data$Happiness_score[Happiness_score_z_scores > 3 | Happiness_score_z_scores < -3]
+Happiness_score_outliers
+```
+> There are no outliers in the target variable Happiness score.
+
+# STEP 6 : EXPLORATORY DATA ANALYSIS
+
+# 1. Checking Top 10 and Bottom 10 Happiest Country
+
+# 1.a. Top 10 Happiest country in the world
+
+```{r}
+Top_10_Happiest_Country <- data %>% select(Country,Region,Happiness_score) %>% head(n=10)
+Top_10_Happiest_Country
+```
+
+# Bar plot is used to visualize the distribution of categorical variable Country with continuous variable Happiness Score for top 10 Happiest Countries in the world.
+
+```{r}
+ggplot(Top_10_Happiest_Country,aes(x=factor(Country,levels=Country),y=Happiness_score))+
+  geom_bar(stat="identity",width=0.5,fill="navyblue")+
+  theme(axis.text.x = element_text(angle=90, vjust=0.6))+
+  theme_light(base_size = 10)+
+  labs(title="Top 10 Happiest Countries",x="Country",y="Happiness Score")
+```
+
+> This plot can help us compare the happiness scores of different countries and understand which countries have the highest levels of happiness.
+
+# 1.b. Bottom 10 Happiest country in the world
+
+```{r}
+Bottom_10_Happiest_Country <- data %>% select(Country,Region,Happiness_score) %>% tail(n=10)
+Bottom_10_Happiest_Country
+```
+
+# Bar plot is used to visualize the distribution of categorical variable Country with continuous variable Happiness Score for bottom 10 Happiest Countries in the world.
+
+```{r}
+ggplot(Bottom_10_Happiest_Country,aes(x=factor(Country,levels=Country),y=Happiness_score))+
+  geom_bar(stat="identity",width=0.5,fill="navyblue")+
+  theme(axis.text.x = element_text(angle=90, vjust=0.6))+
+  theme_light(base_size = 10)+
+  labs(title="Bottom 10 Happiest Countries",x="Country",y="Happiness Score")
+```
+
+> This plot can help us compare the happiness scores of different countries and understand which countries have the lowest levels of happiness.
+
+# 2. EDA for each predictor variable like Life Expectancy, Freedom, Generosity, GDP, Social Support, Corruption, Dystopia Residual against target variable Happiness Score.
+
+# 2.a. Happiness Score & Life Expectency
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Life_expectancy)) + 
+  geom_point(aes(color = Life_expectancy), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Life Expectancy", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Life Expectency")
+```
+
+> We are using scatter plot to investigate the distribution between 2 continuous variable Happiness score and Life expectancy where each point represents a country.This plot shows that there appears to be a pretty significant relationship between Life Expectancy and the happiness score as the data points appear to show a positive trend.
+
+# 2.b. Happiness Score & GDP
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  GDP)) + 
+  geom_point(aes(color = GDP), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & GDP", fill = "Happiness Score",
+       x = "Happiness Score" , y = "GDP")
+```
+
+> This plot shows that there appears to be a pretty significant relationship between GDP and the happiness score as the data points appear to show a positive trend.
+
+# 2.c. Happiness Score & Social_support
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Social_support)) + 
+  geom_point(aes(color = Social_support), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Social Support", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Social Support")
+```
+
+> This plot shows that there appears to be a pretty significant relationship between Social Support and the happiness score as the data points appear to show a positive trend.
+
+# 2.d. Happiness Score & Freedom
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Freedom)) + 
+  geom_point(aes(color = Freedom), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Freedom", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Freedom")
+```
+
+> As predicted this plot shows that as freedom increases so does the happiness score, but we do not know if this relationship is causal and there may be confounds.
+
+# 2.e. Happiness Score & Corruption
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Corruption)) + 
+  geom_point(aes(color = Corruption), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Corruption", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Corruption")
+```
+
+> This plot shows that as perceptions of corruption increase so does the happiness score which was unexpected and I believe shows that corruption is not the driving force of happiness and may only have a small effect. You can see that the distributions of the points are quite scattered and at best there could be a small correlation.
+
+# 2.f. Happiness Score & Generosity
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Generosity)) + 
+  geom_point(aes(color = Generosity), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Generosity", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Generosity")
+```
+
+> The plot may not show a clear relationship between these variables. This may be due to various factors such as the nature of the data, the measurement scales used, or the presence of outliers. Therefore, further analysis and statistical tests may be necessary to fully understand the relationship between happiness score and generosity.
+
+# 2.g. Happiness Score & Dystopia_residual
+
+```{r}
+ggplot(data = data, aes(x = Happiness_score, y =  Dystopia_residual)) + 
+  geom_point(aes(color = Dystopia_residual), show.legend = T, pch=1, stroke=3, size = 2) +
+  theme_light(base_size = 10) + scale_color_viridis(discrete = F) +
+  labs(title = "Happiness Score & Dystopia Residual", fill = "Happiness Score",
+       x = "Happiness Score" , y = "Dystopia Residual")
+```
+
+> This plot shows that there appears to be a pretty significant relationship between Dystopia residual and the happiness score as the data points appear to show a positive trend.
+
+# 3. Happiness Score & Region 
+
+# 3.a. Regionwise Happiness score using overlay barplot
+
+```{r}
+data_means <- aggregate(dataRegion$Happiness_score, list(dataRegion$Region), mean)
+
+data_means %>% arrange(desc(x)) %>% ggplot(aes(x = x, y = reorder(Group.1, x),  fill = Group.1)) +
+  geom_bar(stat = "identity") + 
+  labs(title = "Regionwise Happiness") + 
+  ylab("Region") + 
+  xlab("Happiness Score") + 
+  scale_fill_brewer(palette = "Set3") + 
+  geom_text(aes(label = x), position=position_stack(vjust=0.5),color="black",size=3)
+```
+
+> The above barplot gives the region wise Happiness Score from highest to lowest.
+
+# 3.b. Happiness score and Region boxplot
+
+```{r}
+ggplot(dataRegion, aes(x=reorder(Region,Happiness_score,FUN=median), y= Happiness_score, colour = Region)) + 
+  geom_boxplot() + 
+  theme_light(base_size = 8)+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  labs(title = "Happiness Score Boxplot",x = "Region", y = "Happiness Score")
+```
+> We are using boxplot to display the distribution of a continuous variable Happiness score broken down by a categorical variable Region. From the above boxplot, we can say that North America and ANZ has maximum happiness score and Sub-Saharan Africa has lowest happiness score.
+
+# 4. Number of countries per Region using overlay barplot
+
+```{r}
+ggplot(dataRegion, aes(Region, fill = Region)) +
+  geom_bar(stat = "count", show.legend = F, color = 'gray') + 
+  scale_fill_brewer(palette = "Greens") + coord_flip() +
+  labs(x = "", fill = "Region", y = "Country Counts", 
+       title = "Number of Countries per Region") + 
+  theme_light(base_size = 8)
+```
+
+> The resulting plot shows the number of countries per region, with each region represented by a colored bar. The plot can be used to get a quick overview of how the countries are distributed across different regions. The "Greens" color palette helps to differentiate between regions. Since the y-axis represents the count of countries, the plot can also be used to identify regions with more or fewer countries.
+
+# 5. Exploratory data analysis of Region with other variables.
+
+# Combine Regions to reduce number of categories
+
+```{r}
+dataRegionCat <- dataRegion %>%
+  mutate(Region = fct_recode(Region,
+                            # new name         old name
+                            "Africa" = "Sub-Saharan Africa",    
+                            "ME"     = "Middle East and North Africa",   
+                            "N AMR"  = "North America and ANZ",    
+                            "CIS"    = "Commonwealth of Independent States",   
+                            "S AMR"  = "Latin America and Caribbean",    
+                            "SE Asia"= "Southeast Asia", 
+                            "EUR"    = "Central and Eastern Europe", 
+                            "EUR"    = "Western Europe" ))
+#Reviewing the cropped names of Region column
+dataRegionCat
+```
+
+
+## Create a new factor variable called score
+
+```{r}
+# Create a New Factor Variable for Happiness    ############
+
+mn = min(dataRegionCat$Happiness_score)
+mx = max(dataRegionCat$Happiness_score)
+b = (mx - mn)/3.0
+brk = seq(from = (mn-0.001), to = mx, by = b)
+
+# create new categorical variable
+dataRegionCat$Score <- cut(dataRegionCat$Happiness_score, breaks = brk,labels = c("Low", "Medium", "High"))
+dataRegionCat <- dataRegionCat %>% drop_na()
+
+#Reviewing Score column in dataset
+dataRegionCat
+```
+
+# 5.a. Region by Happiness Score
+
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Happiness_score),
+                     y = Happiness_score, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Happiness Scores", 
+       title = "Region & Happiness Score Distributions") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> This plot visualizes the distribution of happiness scores for different regions of the world. North America is the region with the highest median happiness scores, while SE Asia has the lowest median happiness score. The proportion of low, medium, and high scores varies by region, with some regions having more high scores than others.
+
+# 5.b. Region by GDP per Capita
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, GDP),
+                     y = GDP, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "GDP per Capita", 
+       title = "Region & GDP per Capita") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> From the plot, we can observe that there is a significant variation in the GDP per capita across different regions. SE Asia has the highest median GDP per capita, followed by Australia and New Zealand, and then Middle East and North Africa. Sub-Saharan Africa has the lowest median GDP per capita among all the regions.
+
+# 5.c. Region by Life Expectancy
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Life_expectancy),
+                     y = Life_expectancy, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Health (Life Expectancy)", 
+       title = "Region & Health (Life Expectancy)") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> Overall, this plot shows the distribution of Life Expectancy across different regions of the world, colored by their respective Happiness Scores. We can see that there is variation in Life Expectancy among different regions, with some having higher median values than others. Additionally, we can observe that countries with higher Happiness Scores tend to have higher Life Expectancy values, indicating a positive relationship between these two variables.
+
+# 5.d. Region by Government Corruption
+
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Corruption),
+                     y = Corruption, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Trust (Government Corruption)", 
+       title = "Region & Trust (Government Corruption)") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> Overall, this plot suggests that there is a wide variation in the level of trust in government across different regions, with some regions showing higher levels of trust than others. It also shows that there is some relationship between happiness score and level of trust, with some of the highest scoring regions also showing higher levels of trust.
+
+# 5.e. Region by Freedom
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Freedom),
+                     y = Freedom, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Freedom to make life choices", 
+       title = "Region & Freedom to make life choices") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> The plot indicates that regions with a higher median "Freedom to make life choices" tend to have a higher happiness score. Additionally, there are some variations in the distribution of "Freedom to make life choices" across different regions. For instance, the SE Asia region has a relatively low median "Freedom to make life choices" compared to other regions.
+
+# 5.f. Region by Generosity
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Generosity),
+                     y = Generosity, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Generosity", 
+       title = "Region & Generosity") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+>  Overall, this plot suggests that generosity varies significantly across regions and may be related to regional differences in happiness scores.
+
+# 5.g. Region by Social Support
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Social_support),
+                     y = Social_support, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Social support", 
+       title = "Region & Social support") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> Overall, the plot shows that there are substantial differences in the distribution of "Social support" across different regions of the world.
+
+
+# 5.h. Region by Dystopia Residual
+
+```{r}
+ggplot(data = dataRegionCat, aes(x = reorder(Region, Dystopia_residual),
+                     y = Dystopia_residual, fill = Score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "", fill = "Score", y = "Dystopia Residual", 
+       title = "Region & Dystopia Residual") + 
+  scale_fill_manual(values = c("deepskyblue","olivedrab2", "yellow")) +
+  theme_light(base_size = 10)
+```
+
+> Overall, this plot shows the distribution of Dystopia_residual values across different regions, and allows for easy comparison between regions based on their boxplot shapes and median values.
+
+
+# STEP 7 : HYPOTHESIS TEST :
+
+# The target variable Happiness score is slightly skewed as discussed above and follows nearly a normal distribution, so we will be using T-statistic instead of Z-statisitc.
+
+# 1. Hypothesis test for one mean
+
+# Creating a separate dataset for South East Asia.
+
+```{r}
+Southeast_Asia_Data <- subset(data, Region == "Southeast Asia")
+Southeast_Asia_Data
+```
+
+# Reviewing Summary of South East Asia
+
+```{r}
+summary(Southeast_Asia_Data)
+```
+
+# Visualize the Southeast_Asia data using Boxplot.
+
+```{r}
+ggplot(data = Southeast_Asia_Data, aes(x = reorder(Region, Happiness_score),
+                     y = Happiness_score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "Region", y = "Happiness Score for SouthEast_Asia", 
+       title = "South East Asia & Happiness Score") + 
+  theme_light(base_size = 8)
+```
+
+> The plot states that there are no outliers in SouthEast Asia dataset for Happiness Score. Also the median Happiness score of SouthEast Asia lies near to 5.5.
+
+# Preliminary test to check one-sample t-test assumptions:
+
+# 1. Is this a large sample? - No, because n < 30 while n = 9.
+
+# 2. To check whether the data follow a normal distribution:
+
+# 2.1 Shapiro-Wilk test:
+# H0: NULL Hypothesis : the data are normally distributed
+# H1: Alternative Hypothesis : The data is not normally distributed
+
+```{r}
+shapiro.test(Southeast_Asia_Data$Happiness_score)
+```
+
+> The output of this test will include a p-value. If the p-value is greater than 0.05, then we cannot reject the null hypothesis that the data is normally distributed. If the p-value is less than 0.05, then we can reject the null hypothesis and conclude that the data is not normally distributed. Here in South East Asia data, pvalue > 0.05 implying that the distribution of the data are not significantly different from normal distribution. In other words, we can assume the normality.
+
+
+# 2.2 QQ Plot:
+
+```{r}
+qqnorm(Southeast_Asia_Data$Happiness_score)
+qqline(Southeast_Asia_Data$Happiness_score)
+```
+
+> Another way to check for normality is to use a quantile-quantile plot (QQ plot). A QQ plot compares the quantiles of your data to the quantiles of a theoretical normal distribution. If the data is normally distributed, the points on the plot will fall along a straight line. From the above normality plots, we conclude that the data may come from normal distributions.
+
+# HYPOTHESIS TEST For one mean:
+
+# H0 : NULL Hypothesis : Average Happiness score of countires in SouthEast Asia is 5.
+# H1 : Alternative Hypothesis : Average Happiness score of countires in SouthEast Asia is not equal to 5.
+
+# μ : Mean of Happiness scores of South Asia
+
+# H0: μ = 5
+# H1: μ ≠ 5
+
+# Manual calculations
+
+```{r}
+mu <- 5 #Population mean as per Hypothesis
+xbar <- mean(Southeast_Asia_Data$Happiness_score) #Sample mean
+s <- sd(Southeast_Asia_Data$Happiness_score) #Sample Standard Deviation
+n <- nrow(Southeast_Asia_Data) #Sample size
+
+stdError <- s/sqrt(n) #Standard error
+df <- n-1 #Degree of freedom
+ci <- 0.95 #Confidence interval
+alpha <- 1-ci #Significance level
+tstatistic <- (xbar - mu)/stdError #T-statistic
+tvalue <- qt(1-alpha/2,df) #Critical value of t-distribution
+
+lowerbound <- xbar - tvalue*stdError #lower bound of confidence interval
+upperbound <- xbar + tvalue*stdError #upper bound of confidence interval
+
+p_value <- 2 * (1 - pt(abs(tstatistic), df)) #p-value
+
+cat("Sample size is:",n)
+cat("\nT-Statistic value is :",tstatistic)
+cat("\nDegree of freedom is :",df)
+cat("\np-value is :",p_value)
+cat("\nTrue mean value is :",mu)
+cat("\nConfidence Interval is :",ci*100,"%")
+cat("\nLowerbound for confidence interval is :",lowerbound)
+cat("\nUpperbound for confidence interval is :",upperbound)
+cat("\nMean of Sample is :",xbar)
+```
+
+# One sample t-test : One-sample t-test is used to compare the mean of one sample to a known standard (or theoretical/hypothetical) mean.
+
+```{r}
+t.test(Southeast_Asia_Data$Happiness_score, mu = 5, conf.level = .95)
+```
+
+> Here p-value is greater than 0.05 , also the mean 5.407556 is lying within the confidence interval (4.941534, 5.873577). Hence, NULL Hypothesis is accepted. We conclude that the mean happiness score of countries in South Asia is 5.
+
+
+# 2. Hypothesis test for 2 mean
+
+# Creating two independent dataset.
+
+```{r}
+Cen_East_Europe_data <- subset(data, Region == "Central and Eastern Europe")
+West_Europe_data <- subset(data, Region == "Western Europe")
+
+Europe_data = rbind(Cen_East_Europe_data, West_Europe_data)
+Europe_data
+```
+
+# Reviewing Summary of Europe
+
+```{r}
+#summary statistics by groups
+group_by(Europe_data, Region) %>% summarise(count = n(), 
+                                            mean = mean(Happiness_score, na.rm = TRUE), 
+                                            sd = sd(Happiness_score, na.rm = TRUE))
+```
+
+# Visualize the Europe data using Boxplot.
+
+```{r}
+ggplot(data = Europe_data, aes(x = reorder(Region, Happiness_score),
+                     y = Happiness_score)) +
+  geom_boxplot(show.legend = T) + 
+  labs(x = "Region", y = "Happiness Score for Europe", 
+       title = "Europe & Happiness Score") + 
+  theme_light(base_size = 8)
+```
+
+> the above plot states that Western Europe has more median Happiness score as compared to Central and Eastern Europe.
+
+# Preliminary test to check independent sample t-test assumptions:
+
+# 1. Are the two samples independent?
+# Yes, since scores from Central and Eastern European countries and Western European countries are not related.
+
+# 2. To check whether the data follow a normal distribution:
+
+# 2.1 Shapiro-Wilk test:
+# H0: NULL Hypothesis : the data are normally distributed
+# H1: Alternative Hypothesis : The data is not normally distributed
+
+```{r}
+shapiro.test(Cen_East_Europe_data$Happiness_score)
+shapiro.test(West_Europe_data$Happiness_score)
+```
+
+> The output of this test will include a p-value. If the p-value is greater than 0.05, then we cannot reject the null hypothesis that the data is normally distributed. If the p-value is less than 0.05, then we can reject the null hypothesis and conclude that the data is not normally distributed. Here in Central and Eastern and Western European data, pvalue > 0.05 implying that the distribution of the data are not significantly different from normal distribution. In other words, we can assume the normality.
+
+
+# 2.2 QQ Plot:
+
+```{r}
+qqnorm(Cen_East_Europe_data$Happiness_score)
+qqline(Cen_East_Europe_data$Happiness_score)
+```
+> Another way to check for normality is to use a quantile-quantile plot (QQ plot). A QQ plot compares the quantiles of your data to the quantiles of a theoretical normal distribution. If the data is normally distributed, the points on the plot will fall along a straight line. From the above normality plots, we conclude that the data may come from normal distributions.
+ 
+ 
+```{r}
+qqnorm(West_Europe_data$Happiness_score)
+qqline(West_Europe_data$Happiness_score)
+```
+ 
+> Another way to check for normality is to use a quantile-quantile plot (QQ plot). A QQ plot compares the quantiles of your data to the quantiles of a theoretical normal distribution. If the data is normally distributed, the points on the plot will fall along a straight line. From the above normality plots, we conclude that the data may come from normal distributions.
+
+# Hypothesis test For Difference in Variance :
+
+# A hypothesis test for two independent population variances can be used to determine whether or not the data provide statistical evidence of a difference in the variance of the Happiness score between Central and Eastern European countries and Western European countries.
+
+# H0 : NULL Hypothesis : There is no significant difference between the variance of Happiness scores of Central and Eastern European countries and Western European countries.
+
+# H1 : Alternative Hypothesis : There is significant difference between the variance of Happiness scores of Central and Eastern European countries and Western European countries.
+
+# (σ1)2 : Mean of Happiness scores of Central and Eastern European countries
+# (σ2)2 : Mean of Happiness scores of Western European countries
+
+# H0: (σ1)2−(σ2)2 = 0
+# H1: (σ1)2−(σ2)2 ≠ 0
+
+# Manual calculations for variance
+
+```{r}
+#Sample 1
+s1 <- sd(Cen_East_Europe_data$Happiness_score) #Sample Standard Deviation of Sample1
+n1 <- nrow(Cen_East_Europe_data) #Sample size of Sample1
+var1 <- s1^2 #Variance of sample 1
+
+#Sample 2
+s2 <- sd(West_Europe_data$Happiness_score) #Sample Standard Deviation of Sample2
+n2 <- nrow(West_Europe_data) #Sample size of Sample2
+var2 <- s2^2 #Variance of sample 2
+
+stdError <- s1^2/s2^2 #F-Statistic
+
+df1 <- n1-1 #Degree of freedom for sample 1
+df2 <- n2-1 #Degree of freedom for sample 2
+
+ci <- 0.95 #Confidence intercal
+alpha <- 1-ci #Significance level
+
+fvalue1 <- qf(1-alpha/2, df1, df2) #Critical value of F-distribution for lower bound
+fvalue2 <- qf(1-alpha/2, df2, df1) #Critical value of F-distribution for upper bound
+
+lowerbound <- stdError/fvalue1 #lower bound of confidence interval
+upperbound <- stdError*fvalue2 #upper bound of confidence interval
+
+p_value <- 2*pf(stdError,df1,df2) #p-value
+
+
+cat("\nF-Statistic value is :",stdError)
+cat("\nDegree of freedom for sample 1 is :",df1)
+cat("\nDegree of freedom for sample 2 is :",df2)
+cat("\np-value is :",p_value)
+cat("\nConfidence Interval is :",ci*100,"%")
+cat("\nLowerbound for confidence interval is :",lowerbound)
+cat("\nUpperbound for confidence interval is :",upperbound)
+cat("\nRatio of variances is :",var1/var2)
+```
+
+
+# Using F-test to compare 2 variances 
+
+```{r}
+var.test(Cen_East_Europe_data$Happiness_score,West_Europe_data$Happiness_score,alternative = "two.sided",conf.level = 0.95)
+```
+
+> The p-value of F-test is p = 0.2498. It’s greater than the significance level alpha = 0.05. In conclusion, there is no significant difference between the variances of the two sets of data. Therefore, we can use the classic t-test which assume equality of the two variances.
+
+# Hypothesis test For Difference in mean:
+
+# A hypothesis test for two independent population mean can be used to determine whether or not the data provide statistical evidence of a difference in the mean of the Happiness score between Central and Eastern European countries and Western European countries.
+
+# H0 : NULL Hypothesis : There is no significant difference between the means of Happiness scores of Central and Eastern European countries and Western European countries.
+
+# H1 : Alternative Hypothesis : There is significant difference between the means of Happiness scores of Central and Eastern European countries and Western European countries.
+
+# μ1 : Mean of Happiness scores of Central and Eastern European countries
+# μ2 : Mean of Happiness scores of Western European countries
+
+# H0: μ1−μ2 = 0
+# H1: μ1−μ2 ≠ 0
+
+# Manual calculations
+
+```{r}
+#Sample 1
+xbar1 <- mean(Cen_East_Europe_data$Happiness_score) #Sample mean of Sample1
+s1 <- sd(Cen_East_Europe_data$Happiness_score) #Sample Standard Deviation of Sample1
+n1 <- nrow(Cen_East_Europe_data) #Sample size of Sample1
+
+#Sample 2
+xbar2 <- mean(West_Europe_data$Happiness_score) #Sample mean of Sample2
+s2 <- sd(West_Europe_data$Happiness_score) #Sample Standard Deviation of Sample2
+n2 <- nrow(West_Europe_data) #Sample size of Sample2
+
+stdError <- sqrt(((n1-1)*s1^2 + (n2-1)*s2^2)/(n1+n2-2))*sqrt(1/n1+1/n2) #Standard error
+df <- n1+n2-2 #Degree of freedom
+ci <- 0.95 #Confidence interval
+alpha <- 1-ci #alpha value
+tstatistic <- (xbar1 - xbar2)/stdError #T-statistic
+tvalue <- qt(1-alpha/2,df) #Critical value of t-distribution
+
+lowerbound <- xbar1-xbar2 - tvalue*stdError #lower bound of confidence interval
+upperbound <- xbar1-xbar2 + tvalue*stdError #upper bound of confidence interval
+
+p_value <- 2 * (1 - pt(abs(tstatistic), df)) #p-value
+
+
+cat("\nT-Statistic value is :",tstatistic)
+cat("\nDegree of freedom is :",df)
+cat("\np-value is :",p_value)
+cat("\nConfidence Interval is :",ci*100,"%")
+cat("\nLowerbound for confidence interval is :",lowerbound)
+cat("\nUpperbound for confidence interval is :",upperbound)
+cat("\nMean of Sample1 is :",xbar1)
+cat("\nMean of Sample2 is :",xbar2)
+```
+
+# Independent two-sample t.test with equal variance :The Independent two-samples t-test is used to compare the mean of two independent groups.
+
+```{r}
+t.test(Happiness_score ~ Region, data = Europe_data, var.equal = TRUE, conf.level = .95)
+```
+
+> Here p-value is less than 0.05. Hence, NULL Hypothesis is accepted. We can conclude that Central and Eastern Europe’s mean Happiness score is significantly different from Western Europe’s mean Happiness score.
+
+# STEP 8 : ASSOCIATION BETWEEN VARIABLES
+
+# Checking coorelation between numerical variable.
+
+# Pearson Correlation Matrix
+
+# Creating a data frame for numerical variables only
+
+```{r}
+dataNumerical <- subset(data, select=c("Happiness_score", "GDP", "Social_support", "Life_expectancy", "Freedom", "Generosity", "Corruption", "Dystopia_residual"))
+```
+
+# Checking coorelation between numerical variable.
+
+```{r}
+corData <- data.frame(cor(dataNumerical))
+corData
+```
+
+# Coorelation graph
+
+```{r}
+corrplot(cor(dataNumerical %>% select(Happiness_score:Dystopia_residual)), 
+         method="color", sig.level = 0.01, insig = "blank", addCoef.col = "black", 
+        tl.srt=45, type="upper"
+         )
+```
+> Thus we observe that GDP, Social Support, Life Expectancy, Freedom and Dystopia_residual have positive correlation with Happiness Score. With GDP being highest. On other hand, corruption has negative correlation with Happiness Score. Thus, if a country is highly corrupt, its happiness score is less. Something interesting here is generosity of people has no major affect on Happiness Score. More accurately, it has a very slight negative effect implying that if people of a country are generous the country is slightly unhappier, score wise. 
+
+
+# Highly coorelated variable
+
+```{r}
+library(lattice)
+library(ggplot2)
+library(caret)
+#Finding highly correlated variables
+highly_correlated <- findCorrelation(cor(dataNumerical), cutoff = 0.8)
+cat("High correlated variable is",names(corData)[highly_correlated])
+```
+> GDP is highly correlated with Happiness score.
+
+# STEP 9 : CREATING TRAINING AND TEST DATASET
+
+# Spliting the data into training and testing data
+
+```{r}
+data1 <- subset(data, select=c("Happiness_score", "GDP", "Social_support", "Life_expectancy", "Freedom", "Generosity", "Corruption", "Dystopia_residual","Region"))
+
+i <- sample(2, size=nrow(data1), replace=TRUE, prob=c(0.8, 0.2))
+dataTraining <- data1[i==1,]
+dataTest <- data1[i==2,]
+
+cat("Total observations in Training data set is ",nrow(dataTraining))
+cat("\nTotal observations in Testing data set is ",nrow(dataTest))
+```
+
+# STEP 10 : CREATING LINEAR REGRESSION MODELS
+
+# 1. Simple Linear Regression Model
+
+# Constructing a simple linear regression model of Happiness Score by GDP to carry out regression on the data.
+
+```{r}
+Simple_Linear_Model <- lm(Happiness_score~GDP, data=dataTraining)
+Simple_Linear_Model_Summary <- summary(Simple_Linear_Model)
+Simple_Linear_Model_Summary
+```
+> Is there a relationship between GDP and Happiness Score?
+The Null hypothesis here is that there is no relationship between GDP and Happiness Score. We observe that the p-value is <0.05, implying we can reject the null hypotheses and thus conclude Happiness score depends on GDP. 
+
+> How strong is the relationship between the predictor and the response?
+p-value is close to zero, thus relationship is strong
+
+> Is the relationship between the predictor and the response positive or negative?
+The coefficient is positive and hence there is a positive relationship
+
+
+# Using Simple Linear Regression Model to predict Happiness Score in dataTest.
+
+```{r}
+y_Simple_Linear_Model_Pred <-predict(object = Simple_Linear_Model, newdata = dataTest)
+summary(y_Simple_Linear_Model_Pred)
+```
+
+# Using Simple Linear Regression Model to predict Confidence Interval on Happiness Score in dataTest.
+
+```{r}
+y_Simple_Linear_Model_Pred_conf <-predict(object = Simple_Linear_Model, newdata = dataTest, interval="confidence")
+summary(y_Simple_Linear_Model_Pred_conf)
+```
+# Using Simple Linear Regression Model to predict Prediction Interval on Happiness Score in dataTest.
+
+```{r}
+y_Simple_Linear_Model_Pred_pred <-predict(object = Simple_Linear_Model, newdata = dataTest, interval="prediction")
+summary(y_Simple_Linear_Model_Pred_pred)
+```
+
+# Predicting Test Set Results for Simple Linear Regression Model
+
+```{r}
+Simple_Linear_Model_Pred_DF <- as.data.frame(cbind(Prediction = y_Simple_Linear_Model_Pred, Actual = dataTest$Happiness_score, Confidence_Interval = y_Simple_Linear_Model_Pred_conf, Prediction_Interval=y_Simple_Linear_Model_Pred_pred))
+
+Simple_Linear_Model_Pred_DF
+```
+
+> The prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about Happiness Score in comparison to the average Happiness score.
+
+# Finding RSS, R^2, MAE, MSE, RSE values for simple linear regression model.
+
+```{r}
+library(MLmetrics)
+
+#MAE 
+Simple_Linear_Model_MAE <- MAE(y_pred = y_Simple_Linear_Model_Pred, y_true = dataTest$Happiness_score)
+
+#MSE
+Simple_Linear_Model_MSE <- MSE(y_pred = y_Simple_Linear_Model_Pred, y_true = dataTest$Happiness_score)
+
+#RSS
+Simple_Linear_Model_Residual <- resid(Simple_Linear_Model)
+Simple_Linear_Model_RSS <- sum(Simple_Linear_Model_Residual^2)
+
+#$R^2$
+Simple_Linear_Model_RSquare <- Simple_Linear_Model_Summary$r.squared
+
+#RSE
+Simple_Linear_Model_RSE <- Simple_Linear_Model_Summary$sigma
+
+cat("RSS For Simple Linear Regression Model is:",Simple_Linear_Model_RSS)
+cat("\nR Squared For Simple Linear Regression Model is:",Simple_Linear_Model_RSquare)
+cat("\nMAE For Simple Linear Regression Model is:",Simple_Linear_Model_MAE)
+cat("\nMSE For Simple Linear Regression Model is:",Simple_Linear_Model_MSE)
+cat("\nRSE For Simple Linear Regression Model is:",Simple_Linear_Model_RSE)
+```
+
+
+>
+Mean Absolute Error is the mean of summation of absolute value of actual minus predicted response.
+Mean Square Error is the mean of summation of square of the actual minus predicted response value.
+Residual Sum of Square is the summation of square of the actual minus predicted response value.
+The minimum the above three value, the better the model.
+
+>
+Residual Standard Error is a measure of lack of fit of the model to the data. If predicted value for one or more observations is far from actual value then RSE will be large indicating a model that does not fit the data well. What constitutes a good RSE is not well defined.
+
+>
+R2 lies between zero and 1. Higher the value, the better. But the decision is practically made on the application. 
+
+# Diagnostic plot for Simple Linear Regression Model
+
+```{r}
+par(mfrow=c(2,2))
+plot(Simple_Linear_Model)
+```
+
+> Residuals vs fitted plot shows that the relationship is non-linear. We can try some non-linear models and compare the results
+> QQ plot shows that the data is slightly not normal and is skewed.
+
+# 2. Multiple Linear Regression Model
+
+# Constructing a multiple linear regression model of Happiness Score by all features to carry out regression on the data.
+
+```{r}
+Multiple_Regression_Model <- lm(Happiness_score~. , data=dataTraining)
+Multiple_Regression_Model_Summary <- summary(Multiple_Regression_Model)
+Multiple_Regression_Model_Summary
+```
+>
+Is there a relationship between the predictors and the response?
+- Null Hypothesis: There is no relationship between predictors and response
+Alternative Hypothesis: Response is dependent on atleast one predictor
+We see that the F-statistic is highly greater than 1 and hence we reject the null hypothesis. Thus there is a relationship between atleast one predictor and the response.
+
+>
+Which predictors appear to have a statistically significant relationship to the response?
+All the predictors except Region appear to have a statistically signiticant relationship to the response. 
+
+>
+What does one unit increase in corruption imply?
+A one unit increase in corruption implies that Happiness Score would reduce by 0.6388.
+
+>
+R2 = 1. Is it because the model has multicollinearity between predictors?
+We used the Variance Inflation Factor from the car library to check this. All factors except Region were less than 10 (recommended threshold). Hence, we think that multicollinearity is a problem. 
+
+```{r}
+library(car)
+car::vif(Multiple_Regression_Model)
+```
+
+# Now we will again construct multiple linear regression without Region variable.
+
+
+```{r}
+Multiple_Regression_Model <- lm(Happiness_score~. -Region , data=dataTraining)
+Multiple_Regression_Model_Summary <- summary(Multiple_Regression_Model)
+Multiple_Regression_Model_Summary
+```
+
+# Using Multiple Linear Regression Model to predict Happiness Score in dataTest.
+
+```{r}
+y_Multiple_Regression_Model_Pred <-predict(object = Multiple_Regression_Model, newdata = dataTest)
+summary(y_Multiple_Regression_Model_Pred)
+```
+
+# Using Multiple Linear Regression Model to predict Confidence Interval on Happiness Score in dataTest.
+
+```{r}
+y_Multiple_Regression_Model_Pred_conf <-predict(object = Multiple_Regression_Model, newdata = dataTest, interval="confidence")
+summary(y_Multiple_Regression_Model_Pred_conf)
+```
+
+
+# Using Multiple Regression Model to predict Prediction Interval on Happiness Score in dataTest.
+
+```{r}
+y_Multiple_Regression_Model_Pred_pred <-predict(object = Multiple_Regression_Model, newdata = dataTest, interval="prediction")
+summary(y_Multiple_Regression_Model_Pred_pred)
+```
+
+
+# Predicting Test Set Results for Multiple Linear Regression Model
+
+```{r}
+Multiple_Regression_Model_Pred_DF <- as.data.frame(cbind(Prediction = y_Multiple_Regression_Model_Pred, Actual = dataTest$Happiness_score, Confidence_Interval = y_Multiple_Regression_Model_Pred_conf, Prediction_Interval=y_Multiple_Regression_Model_Pred_pred))
+
+Multiple_Regression_Model_Pred_DF
+```
+
+> The prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about Happiness Score in comparison to the average Happiness score.
+
+
+# Finding RSS, R^2, MAE and MSE values for Multiple linear regression model.
+
+```{r}
+library(MLmetrics)
+
+#MAE
+Multiple_Regression_Model_MAE <- MAE(y_pred = y_Multiple_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#MSE
+Multiple_Regression_Model_MSE <- MSE(y_pred = y_Multiple_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#RSS
+Multiple_Regression_Model_Residual <- resid(Multiple_Regression_Model)
+Multiple_Regression_Model_RSS <- sum(Multiple_Regression_Model_Residual^2)
+
+#$R^2$
+Multiple_Regression_Model_RSquare <- Multiple_Regression_Model_Summary$r.squared
+
+#RSE
+Multiple_Regression_Model_RSE <- Multiple_Regression_Model_Summary$sigma
+
+
+cat("RSS For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSS)
+cat("\nR Squared For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSquare)
+cat("\nMAE For Multiple Linear Regression Model is:",Multiple_Regression_Model_MAE)
+cat("\nMSE For Multiple Linear Regression Model is:",Multiple_Regression_Model_MSE)
+cat("\nRSE For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSE)
+```
+> The MSE, MAE, RSE are too small. Suggesting a good model or an overfit. Since they were calculated on testing data, we do not think it is overfitting and conclude it is a good model.
+
+# Diagnostic plot for Multiple Linear Regression Model
+
+```{r}
+par(mfrow=c(2,2))
+plot(Multiple_Regression_Model)
+```
+
+> Residuals vs fitted plot shows that the relationship is linear.
+
+# 3. Forward Stepwise Subset Selection Linear Regression Model
+
+> 
+Begins with Null Model
+Fit p simple linear regressions and add to the null model the variable that results in the lowest RSS.
+Add to that model the variable that results in the lowest RSS amongst all two-variable models.
+Continue until some stopping rule is satisfied, for example when all remaining variables have a p-value above some threshold.
+
+
+```{r}
+library(MASS)
+# Create a null model 
+forward_intercept_only <- lm(Happiness_score ~ 1, data=dataTraining)
+# Create a full model
+forward_all <- lm(Happiness_score~., data=dataTraining)
+# perform forward step-wise regression
+Forward_Regression_Model <- stepAIC (forward_intercept_only, direction='forward',scope = formula(forward_all))
+```
+
+# Viewing Results of Forward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+# view results of forward stepwise regression
+Forward_Regression_Model$anova
+```
+
+# Viewing summary for Forward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+# view final model
+Forward_Regression_Model_Summary <- summary(Forward_Regression_Model)
+Forward_Regression_Model_Summary
+```
+
+# Using Forward Stepwise Subset Selection Linear Regression Model to predict Happiness Score in dataTest.
+
+```{r}
+y_Forward_Regression_Model_Pred <-predict(object = Forward_Regression_Model, newdata = dataTest)
+summary(y_Forward_Regression_Model_Pred)
+```
+
+# Using Forward Stepwise Subset Selection Linear Regression Model to predict Confidence Interval on Happiness Score in dataTest.
+
+```{r}
+y_Forward_Regression_Model_Pred_conf <-predict(object = Forward_Regression_Model, newdata = dataTest, interval="confidence")
+summary(y_Forward_Regression_Model_Pred_conf)
+```
+
+# Using Forward Stepwise Subset Selection Linear Regression Model to predict Prediction Interval on Happiness Score in dataTest.
+
+```{r}
+y_Forward_Regression_Model_Pred_pred <-predict(object = Forward_Regression_Model, newdata = dataTest, interval="prediction")
+summary(y_Forward_Regression_Model_Pred_pred)
+```
+
+
+# Predicting Test Set Results for Forward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+Forward_Regression_Model_Pred_DF <- as.data.frame(cbind(Prediction = y_Forward_Regression_Model_Pred, Actual = dataTest$Happiness_score, Confidence_Interval = y_Forward_Regression_Model_Pred_conf, Prediction_Interval=y_Forward_Regression_Model_Pred_pred))
+
+Forward_Regression_Model_Pred_DF
+```
+
+> The prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about Happiness Score in comparison to the average Happiness score.
+
+
+# Finding RSS, R^2, MAE and MSE values for Forward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+library(MLmetrics)
+
+#MAE
+Forward_Regression_Model_MAE <- MAE(y_pred = y_Forward_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#MSE
+Forward_Regression_Model_MSE <- MSE(y_pred = y_Forward_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#RSS
+Forward_Regression_Model_Residual <- resid(Forward_Regression_Model)
+Forward_Regression_Model_RSS <- sum(Forward_Regression_Model_Residual^2)
+
+#$R^2$
+Forward_Regression_Model_RSquare <- Forward_Regression_Model_Summary$r.squared
+
+#RSE
+Forward_Regression_Model_RSE <- Forward_Regression_Model_Summary$sigma
+
+cat("RSS For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSS)
+cat("\nR Squared For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSquare)
+cat("\nMAE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_MAE)
+cat("\nMSE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_MSE)
+cat("\nRSE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSE)
+```
+
+# Diagnostic plot for Forward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+par(mfrow=c(2,2))
+plot(Forward_Regression_Model)
+```
+
+> Residuals vs fitted plot shows that the relationship is linear.
+
+# 4. Backward Stepwise Subset Selection Linear Regression Model
+
+>Start with all variables in the model.
+Remove the variable with the largest p-value — that is, the variable that is the least statistically significant.
+The new (p−1) variable model is fit, and the variable with the largest p-value is removed.
+Continue until a stopping rule is reached.
+
+```{r}
+# Create a full model
+backward_all <- lm(Happiness_score~., data=dataTraining)
+# perform Backward step-wise regression
+Backward_Regression_Model <- stepAIC (backward_all, direction='backward')
+```
+
+# Viewing Results of Backward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+# view results of backward stepwise regression
+Backward_Regression_Model$anova
+```
+
+# Viewing summary for Backward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+# view final model
+Backward_Regression_Model_Summary <- summary(Backward_Regression_Model)
+Backward_Regression_Model_Summary
+```
+
+# Using Backward Stepwise Subset Selection Linear Regression Model to predict Happiness Score in dataTest.
+
+```{r}
+y_Backward_Regression_Model_Pred <-predict(object = Backward_Regression_Model, newdata = dataTest)
+summary(y_Backward_Regression_Model_Pred)
+```
+
+# Using Backward Stepwise Subset Selection Linear Regression Model to predict Confidence Interval on Happiness Score in dataTest.
+
+```{r}
+y_Backward_Regression_Model_Pred_conf <-predict(object = Backward_Regression_Model, newdata = dataTest, interval="confidence")
+summary(y_Backward_Regression_Model_Pred_conf)
+```
+
+
+# Using Backward Stepwise Subset Selection Linear Regression Model to predict Prediction Interval on Happiness Score in dataTest.
+
+```{r}
+y_Backward_Regression_Model_Pred_pred <-predict(object = Backward_Regression_Model, newdata = dataTest, interval="prediction")
+summary(y_Backward_Regression_Model_Pred_pred)
+```
+
+# Predicting Test Set Results for Backward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+Backward_Regression_Model_Pred_DF <- as.data.frame(cbind(Prediction = y_Backward_Regression_Model_Pred, Actual = dataTest$Happiness_score, Confidence_Interval = y_Backward_Regression_Model_Pred_conf, Prediction_Interval=y_Backward_Regression_Model_Pred_pred))
+
+Backward_Regression_Model_Pred_DF
+```
+
+> The prediction interval is substantially wider than the confidence interval, reflecting the increased uncertainty about Happiness Score in comparison to the average Happiness score.
+
+# Finding RSS, R^2, MAE and MSE values for Backward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+library(MLmetrics)
+
+#MAE
+Backward_Regression_Model_MAE <- MAE(y_pred = y_Backward_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#MSE
+Backward_Regression_Model_MSE <- MSE(y_pred = y_Backward_Regression_Model_Pred, y_true = dataTest$Happiness_score)
+
+#RSS
+Backward_Regression_Model_Residual <- resid(Backward_Regression_Model)
+Backward_Regression_Model_RSS <- sum(Backward_Regression_Model_Residual^2)
+
+#$R^2$
+Backward_Regression_Model_RSquare <- Backward_Regression_Model_Summary$r.squared
+
+#RSE
+Backward_Regression_Model_RSE <- Backward_Regression_Model_Summary$sigma
+
+
+cat("RSS For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSS)
+cat("\nR Squared For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSquare)
+cat("\nMAE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_MAE)
+cat("\nMSE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_MSE)
+cat("\nRSE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSE)
+```
+
+# Diagnostic plot for Backward Stepwise Subset Selection Linear Regression Model
+
+```{r}
+par(mfrow=c(2,2))
+plot(Backward_Regression_Model)
+```
+
+> Residuals vs fitted plot shows that the relationship is linear.
+
+# STEP 11 : MODEL ASSESSMENT
+
+# 1. Simple Linear Regression Model
+
+```{r}
+cat("RSS For Simple Linear Regression Model is:",Simple_Linear_Model_RSS)
+cat("\nR Squared For Simple Linear Regression Model is:",Simple_Linear_Model_RSquare)
+cat("\nMAE For Simple Linear Regression Model is:",Simple_Linear_Model_MAE)
+cat("\nMSE For Simple Linear Regression Model is:",Simple_Linear_Model_MSE)
+cat("\nRSE For Simple Linear Regression Model is:",Simple_Linear_Model_RSE)
+```
+
+# 2. Multiple Linear Regression Model
+
+```{r}
+cat("RSS For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSS)
+cat("\nR Squared For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSquare)
+cat("\nMAE For Multiple Linear Regression Model is:",Multiple_Regression_Model_MAE)
+cat("\nMSE For Multiple Linear Regression Model is:",Multiple_Regression_Model_MSE)
+cat("\nRSE For Multiple Linear Regression Model is:",Multiple_Regression_Model_RSE)
+```
+
+
+# 3. Forward Stepwise subset selection Linear Regression Model
+
+```{r}
+cat("RSS For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSS)
+cat("\nR Squared For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSquare)
+cat("\nMAE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_MAE)
+cat("\nMSE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_MSE)
+cat("\nRSE For Forward Stepwise Subset Selection Linear Regression Model is:",Forward_Regression_Model_RSE)
+```
+
+
+# 4. Backward Stepwise subset selection Linear Regression Model
+
+```{r}
+cat("RSS For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSS)
+cat("\nR Squared For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSquare)
+cat("\nMAE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_MAE)
+cat("\nMSE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_MSE)
+cat("\nRSE For Backward Stepwise Subset Selection Linear Regression Model is:",Backward_Regression_Model_RSE)
+```
+
+>
+Based on the given metrics, it seems that all four models perform well, but they are designed to answer different questions.
+
+>
+The Simple Linear Regression model uses only one predictor variable, and it appears to have the lowest performance compared to the other models, with a higher RSS, lower R-squared, higher MAE, and higher MSE, higher RSE. This model is useful when we want to study the relationship between two variables and see how a change in one variable affects the other.
+
+>
+The Multiple Linear Regression model uses multiple predictor variables, and it has a lower RSS, higher R-squared, lower MAE, lower MSE and lower RSE than the Simple Linear Regression model. This model is helpful when we want to study the relationship between a response variable and multiple predictor variables and see how these predictors affect the response variable.
+
+>
+The Forward Stepwise and Backward Stepwise Subset Selection Linear Regression models both use a subset of predictor variables, and they have the same performance metrics as the Multiple Linear Regression model. These models are useful when we want to identify a subset of predictors that best explain the variability in the response variable.
+
+>
+Given that all four models have similar performance, the choice of which model to use depends on the research question and the available data. If the research question involves only one predictor variable, then the Simple Linear Regression model is appropriate. If the research question involves multiple predictors, then the Multiple Linear Regression model or one of the Subset Selection models may be more appropriate. If we are interested in identifying the most important predictors, then we should use one of the Subset Selection models
